@@ -1,0 +1,37 @@
+---
+- hosts: switches
+  gather_facts: false
+  connection: local
+
+  vars_files:
+    - vault.yml # This yaml contains device connection credentials --> Username & Password
+
+  pre_tasks:
+    - name: Write Hosts to a HOSTS file
+      command: python3 __READ_HOST_PYTHON_DIRECTORY__/Read_Hosts.py # As a pretask we modify ansible host file
+
+    - name: SHOW_NTP_STATUS                   # In here we using show ntp status command to get necessary information
+      ios_command:                            # After that we save output file "sh_ntp_stat" for each host
+        commands: sh ntp status
+        host: "{{ ansible_host }}"
+        provider: "{{ cli }}"
+      register:  sh_ntp_stat
+
+    - name: SAVE_OUTPUT_TO_FOR_POST_TASK
+      copy:
+          content: "{{ ansible_host + ': ' + sh_ntp_stat.stdout[0].split('\n')[0].split(' ')[7]}}" # We format output of the sh_ntp_stat and save the formatted file with the name of the device IP
+          dest: "/home/n0bleA/Ansible/{{ ansible_host }}.txt"
+
+    - name: Display paths of all .txt files in dir  # This is used for debug purpose to whether output texts are created or not
+      debug:
+        msg: "{{ hosts_text }}"
+
+  vars:
+    hosts_text: "{{lookup('fileglob', '*.txt')}}" # This is ansible variable for list all text files inside a directory
+    cli:
+      username: "{{ username }}"   # Device credentials
+      password: "{{ password }}"   # Device credentials
+
+  post_tasks:
+    - name: PROCESS_OUTPUT_FROM_HOSTS_TEXTS.
+      command: python3 /home/n0bleA/Ansible/ntp_status.py "{{ hosts_text }}"  # This is where we process all text files. The text files are given as a parameter.
